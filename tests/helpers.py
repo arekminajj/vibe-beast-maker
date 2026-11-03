@@ -29,12 +29,74 @@ REAL_CATALOG = [
 CARDIO_HIT = {"activityId": 535, "name": "Bieganie", "type": 2, "energy": 340, "measuresDescription": "5 km w 00:30:00"}
 
 
-def workout(wid: str, start: str, minutes: int, title: str = "Push") -> dict[str, Any]:
+TEMPLATES = [
+    {"id": "BENCH", "title": "Bench Press (Barbell)", "primary_muscle_group": "chest",
+     "secondary_muscle_groups": ["triceps", "shoulders"]},
+    {"id": "SQUAT", "title": "Squat (Barbell)", "primary_muscle_group": "quadriceps",
+     "secondary_muscle_groups": ["glutes"]},
+]
+
+
+def sets(*pairs: tuple[float, int], warmup: tuple[float, int] | None = None) -> list[dict[str, Any]]:
+    out = [{"index": 0, "type": "warmup", "weight_kg": warmup[0], "reps": warmup[1]}] if warmup else []
+    return out + [{"index": i + len(out), "type": "normal", "weight_kg": w, "reps": r} for i, (w, r) in enumerate(pairs)]
+
+
+def exercise(template_id: str, *pairs: tuple[float, int], warmup: tuple[float, int] | None = None) -> dict[str, Any]:
+    title = next(t["title"] for t in TEMPLATES if t["id"] == template_id)
+    return {"index": 0, "title": title, "exercise_template_id": template_id, "sets": sets(*pairs, warmup=warmup)}
+
+
+def workout(
+    wid: str, start: str, minutes: int, title: str = "Push", exercises: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     from datetime import datetime, timedelta
 
     begin = datetime.fromisoformat(start.replace("Z", "+00:00"))
     end = begin + timedelta(minutes=minutes)
-    return {"id": wid, "title": title, "start_time": begin.isoformat(), "end_time": end.isoformat(), "exercises": []}
+    return {"id": wid, "title": title, "start_time": begin.isoformat(), "end_time": end.isoformat(),
+            "exercises": exercises or []}
+
+
+class FakeFitatuTools:
+    """The FitatuTools.call() envelope for get_progress and get_weight_history, from per-day data."""
+
+    def __init__(self, food: dict[str, tuple[float, float]] | None = None, weights: dict[str, float] | None = None,
+                 kcal_target: float = 2500, protein: tuple[float, float] = (120, 160)) -> None:
+        self.food = food or {}  # day -> (kcal, protein g)
+        self.weights = weights or {}
+        self.kcal_target, self.protein = kcal_target, protein
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def call(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        from datetime import date, timedelta
+
+        args = arguments or {}
+        self.calls.append((name, args))
+        start, end = date.fromisoformat(args.get("from_date", "2000-01-01")), date.fromisoformat(args.get("to_date", "2100-01-01"))
+        if name == "get_progress":
+            if (end - start).days + 1 > 31:
+                return {"ok": False, "error": {"error_type": "validation", "message": "at most 31 days"}}
+            days = []
+            for i in range((end - start).days + 1):
+                day = (start + timedelta(days=i)).isoformat()
+                kcal, protein = self.food.get(day, (None, None))
+                days.append({
+                    "date": day,
+                    "energy": {"logged": kcal, "target": self.kcal_target},
+                    "protein": {"logged": protein, "target_min": self.protein[0], "target_max": self.protein[1]},
+                    "fat": {"logged": kcal and kcal * 0.03}, "carbohydrate": {"logged": kcal and kcal * 0.12},
+                })
+            return {"ok": True, "data": {"days": days}}
+        if name == "get_weight_history":
+            rows = [{"date": d, "value": v} for d, v in sorted(self.weights.items(), reverse=True)
+                    if start.isoformat() <= d <= end.isoformat()]
+            if len(rows) > args.get("limit", 41) or args.get("limit", 0) > 41:
+                return {"ok": False, "error": {"error_type": "validation", "message": "limit must be at most 41"}}
+            return {"ok": True, "data": rows}
+        if name == "get_today":
+            return {"ok": True, "data": {"date": "2026-11-03"}}
+        return {"ok": False, "error": {"error_type": "validation", "message": f"fake has no {name}"}}
 
 
 class FakeResponse:
@@ -50,9 +112,17 @@ class FakeResponse:
 class FakeHevy:
     """Enough of the Hevy API for the sync: paged workouts (newest first) and the events feed."""
 
-    def __init__(self, workouts: list[dict[str, Any]] | None = None, deleted: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        workouts: list[dict[str, Any]] | None = None,
+        deleted: list[str] | None = None,
+        templates: list[dict[str, Any]] | None = None,
+        measurements: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.workouts = workouts or []
         self.deleted = deleted or []
+        self.templates = templates if templates is not None else TEMPLATES
+        self.measurements = measurements or []
         self.calls: list[str] = []
 
     def get(self, url: str, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None, **_: Any):
@@ -70,6 +140,10 @@ class FakeHevy:
                 return FakeResponse(200, {"page": 1, "page_count": 1, "workouts": []})
             items = [{"type": "deleted", "id": wid, "deleted_at": "2026-10-30T00:00:00Z"} for wid in self.deleted]
             key = "events"
+        elif path == "/v1/exercise_templates":
+            items, key = self.templates, "exercise_templates"
+        elif path == "/v1/body_measurements":
+            items, key = self.measurements, "body_measurements"
         else:
             return FakeResponse(404, "not found")
         page_count = max(1, -(-len(items) // size))

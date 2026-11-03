@@ -1,12 +1,19 @@
-# hevy-fitatu-sync
+# Hevy + Fitatu for AI agents
 
-Logs your [Hevy](https://hevy.com) workouts in the [Fitatu](https://www.fitatu.com) diary as
-activities, so the kcal you burn lifting count toward the day's balance in Fitatu.
+Gives Claude, or any other MCP agent, your strength training from [Hevy](https://hevy.com)
+and your food diary from [Fitatu](https://www.fitatu.com) side by side. Then you can ask
+questions like these:
 
-Each Hevy workout becomes one Fitatu activity (by default *Trójbój siłowy* at 300 kcal/h) on
-the workout's day, with its length and an estimate of the kcal burned. Running the sync again is safe:
-workouts already in Fitatu are left alone, edited workouts are replaced and deleted workouts
-are removed.
+- "How did the last 4 weeks go? Do I eat enough protein for how much I train?"
+- "Do I eat more on training days than on rest days?"
+- "My bench has stalled since September. Did my eating or weight change then?"
+- "What is my maintenance intake, judging by my weight trend?"
+- "Which muscle groups am I under-training?"
+
+It is **read-only**: the agent cannot change anything in Hevy or Fitatu.
+
+The same package also has [`hevy-fitatu-sync`](#sync-workouts-into-fitatu), which logs your
+Hevy workouts in Fitatu as activities.
 
 > **Fitatu has no public API.** This uses [fitatu-api](https://github.com/Jezue/fitatu_library),
 > an unofficial client reverse-engineered from the Fitatu apps. It can break when Fitatu changes
@@ -15,29 +22,109 @@ are removed.
 
 ## Requirements
 
-- Python 3.11+
 - A **Hevy Pro** API key: in the Hevy app, *Settings → Developer*, or <https://hevy.com/settings?developer>.
 - A Fitatu account (Premium is not needed).
+- [uv](https://docs.astral.sh/uv/) for the Claude Code plugin, or Python 3.11+ and pip.
 
-## Install
+## Add it to Claude Code (plugin)
+
+```text
+/plugin marketplace add arekminajj/vibe-beast-maker
+/plugin install hevy-fitatu@vibe-beast-maker
+```
+
+Claude Code then asks for your Hevy API key, your Fitatu e-mail and password, and your time
+zone. The key and the password are stored as secrets. The plugin also adds a skill that tells
+Claude how to read the numbers.
+
+## Add it to Claude Desktop, Cursor or another MCP client
+
+```bash
+pip install "hevy-fitatu-sync[mcp] @ git+https://github.com/arekminajj/vibe-beast-maker"
+fitatu-api login      # once: saves the Fitatu session to ~/.fitatu/session.json
+```
+
+```json
+{
+  "mcpServers": {
+    "hevy-fitatu": {
+      "command": "hevy-fitatu-mcp",
+      "env": {
+        "HEVY_API_KEY": "your-hevy-key",
+        "HEVY_FITATU_TIMEZONE": "Europe/Warsaw"
+      }
+    }
+  }
+}
+```
+
+If the client cannot find `hevy-fitatu-mcp`, use its full path (`which hevy-fitatu-mcp`).
+With [uv](https://docs.astral.sh/uv/) you can skip the `pip install`: set `"command": "uvx"` and
+`"args": ["--from", "hevy-fitatu-sync[mcp] @ git+https://github.com/arekminajj/vibe-beast-maker", "hevy-fitatu-mcp"]`.
+
+Instead of `fitatu-api login` you can set `FITATU_EMAIL` and `FITATU_PASSWORD`. The first
+call logs in and saves the session file. Accounts made with Apple or Facebook have no
+password: use `fitatu-api import-session` (see the [fitatu-api README](https://github.com/Jezue/fitatu_library#authentication--session-file)),
+or put the session JSON in `FITATU_SESSION_JSON`.
+
+## Tools
+
+### Training and food together
+
+| Tool | What it answers |
+| --- | --- |
+| `analyze_training_and_nutrition` | Start here. Training per week and sets per muscle group. Average kcal, protein, carbs and fat on **training days vs rest days**. Protein **g/kg**. The **weight trend** (kg/week). With 14+ logged days and weigh-ins, an **estimated maintenance intake** and daily surplus or deficit. `notes` says what the data does not cover. |
+| `get_daily_log` | Day by day: workouts (minutes, sets, volume, muscles), what was logged in Fitatu against the goals, and the weight (from Fitatu, else Hevy). |
+
+### Training (Hevy)
+
+| Tool | What it answers |
+| --- | --- |
+| `analyze_training` | Weekly workouts, minutes, working sets and volume. Sets per muscle group per week. The longest gap. The most trained exercises. |
+| `analyze_exercise_progress` | One lift by name (`"bench"`): per session the top weight, best set, e1RM and volume, with PRs flagged and the trend. |
+| `get_workouts` | Every workout with its working sets as text (`80kg×5@8`). |
+
+### Food (Fitatu)
+
+The read tools of [fitatu-api](https://github.com/Jezue/fitatu_library), as they are:
+`get_today`, `get_day`, `get_progress`, `get_report`, `get_range_summary`, `get_top_foods`,
+`get_targets`, `get_profile`, `get_weight_history`, `get_body_measurements`,
+`get_measurement_history`, `get_water`, `search_food`, `get_food_measures`, `search_recipes`,
+`get_recipe`. To log meals from an agent, add fitatu-api's own server, `fitatu-mcp`, next to this one.
+
+### Prompts
+
+- `training_nutrition_review`: a review of the last N weeks with 3 recommendations.
+- `lift_progress`: how one lift progressed, and whether eating explains a stall.
+
+### How the numbers are calculated
+
+- **Days** follow your time zone (`HEVY_FITATU_TIMEZONE`, else `HEVY_TIMEZONE`, else the system's).
+- **Working sets** are all sets except warm-ups. **Volume** is weight × reps. A set counts 1
+  for the exercise's primary muscle and 0.5 for each secondary one.
+- **e1RM** uses Epley, `w × (1 + reps/30)`, for sets of 1–15 reps.
+- **Food** is everything logged in the Fitatu diary for a day, planned or ticked as eaten. A day
+  with nothing logged is left out of the averages, not counted as zero.
+- **Maintenance** is the average intake minus the change in stored energy: the weight trend
+  (least squares over the weigh-ins) × 7700 kcal/kg. It is only given with food logged on at
+  least 14 days and 70% of the range, and weigh-ins spanning 14+ days.
+- Without Fitatu Premium, Fitatu answers day by day, so a long range takes a while (31 days per call).
+
+## Sync workouts into Fitatu
+
+`hevy-fitatu-sync` logs each Hevy workout in the Fitatu diary as an activity (by default
+*Trójbój siłowy* at 300 kcal/h) on the workout's day, with its length and an estimate of the
+kcal burned, so the kcal you burn lifting count toward the day's balance. Running the sync again
+is safe: workouts already in Fitatu are left alone, edited workouts are replaced and deleted
+workouts are removed. It is the only part of this package that writes to Fitatu.
 
 ```bash
 pip install "git+https://github.com/arekminajj/vibe-beast-maker"
-```
-
-## Log in
-
-```bash
 export HEVY_API_KEY=your-hevy-key
-fitatu-api login                 # asks for the e-mail and password, saves ~/.fitatu/session.json
+fitatu-api login
 ```
 
-Instead of `fitatu-api login` you can set `FITATU_EMAIL` and `FITATU_PASSWORD`: the first run
-logs in and saves the session file. Accounts made with Apple or Facebook have no password: use
-`fitatu-api import-session` (see the [fitatu-api README](https://github.com/Jezue/fitatu_library#authentication--session-file)),
-or put the session JSON in `FITATU_SESSION_JSON`.
-
-## Use
+### Use
 
 ```bash
 hevy-fitatu-sync sync --dry-run       # what would change in the last 7 days; writes nothing
@@ -82,7 +169,7 @@ Every hour with cron:
 0 * * * * HEVY_API_KEY=... HEVY_FITATU_TIMEZONE=Europe/Warsaw /path/to/venv/bin/hevy-fitatu-sync sync >> ~/.hevy-fitatu-sync/sync.log 2>&1
 ```
 
-## How it works
+### How the sync works
 
 - **The activity.** Fitatu's catalog has no time-based *strength training*: its strength
   entries are single exercises counted in reps. *Trójbój siłowy* (powerlifting) is the
@@ -109,10 +196,20 @@ Every hour with cron:
 git clone https://github.com/arekminajj/vibe-beast-maker && cd vibe-beast-maker
 pip install -e ".[dev]"
 pytest
+claude plugin validate .        # the Claude Code plugin and marketplace manifests
 ```
 
-The tests run offline: Hevy is faked, and Fitatu is the in-memory demo backend that ships with
-fitatu-api.
+The tests run offline. Hevy is faked. Fitatu is either a fake or the in-memory demo backend
+that ships with fitatu-api. The MCP tests drive the server through an MCP client.
+
+Layout:
+
+- `src/hevy_fitatu_sync/mcp_server.py`: the MCP server (`hevy-fitatu-mcp`)
+- `src/hevy_fitatu_sync/combined.py`: the day-by-day join, and the training vs nutrition analysis
+- `src/hevy_fitatu_sync/training.py`: training analysis (sets, volume, muscles, e1RM)
+- `src/hevy_fitatu_sync/hevy.py`: the Hevy API client
+- `src/hevy_fitatu_sync/cli.py`, `sync.py`, `energy.py`, `state.py`: the sync
+- `.claude-plugin/`, `.mcp.json`, `skills/`: the Claude Code plugin
 
 ## License
 

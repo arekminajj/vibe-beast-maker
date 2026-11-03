@@ -19,3 +19,4 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -q
       - run: hevy-fitatu-sync --version
+      - run: hevy-fitatu-mcp --version

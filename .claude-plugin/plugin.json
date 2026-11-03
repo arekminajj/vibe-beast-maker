@@ -1,0 +1,39 @@
+{
+  "name": "hevy-fitatu",
+  "version": "0.2.0",
+  "description": "Your training (Hevy) and food diary (Fitatu) together, read-only: weekly load, sets per muscle, lift progress, intake on training vs rest days, protein per kg, and energy balance against your weight trend.",
+  "author": { "name": "arekminajj" },
+  "homepage": "https://github.com/arekminajj/vibe-beast-maker",
+  "repository": "https://github.com/arekminajj/vibe-beast-maker",
+  "license": "MIT",
+  "keywords": ["hevy", "fitatu", "fitness", "nutrition", "training", "mcp"],
+  "userConfig": {
+    "hevy_api_key": {
+      "type": "string",
+      "title": "Hevy API key",
+      "description": "Hevy Pro API key: Hevy app, Settings → Developer.",
+      "sensitive": true,
+      "required": true
+    },
+    "fitatu_email": {
+      "type": "string",
+      "title": "Fitatu e-mail",
+      "description": "Your Fitatu login. Leave empty if you ran `fitatu-api login` (session in ~/.fitatu/session.json).",
+      "required": false
+    },
+    "fitatu_password": {
+      "type": "string",
+      "title": "Fitatu password",
+      "description": "Used once to log in; the session is then saved to ~/.fitatu/session.json.",
+      "sensitive": true,
+      "required": false
+    },
+    "timezone": {
+      "type": "string",
+      "title": "Time zone",
+      "description": "IANA time zone that decides which day a workout or meal falls on, e.g. Europe/Warsaw.",
+      "default": "Europe/Warsaw",
+      "required": false
+    }
+  }
+}
