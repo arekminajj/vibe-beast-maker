@@ -53,8 +53,20 @@ def rate_from_hit(hit: dict[str, Any]) -> ActivityRate | None:
     )
 
 
-def pick_hit(hits: list[dict[str, Any]], activity_id: int | None = None) -> dict[str, Any] | None:
-    """The requested activity, else the first strength activity, else the first hit."""
+def pick_hit(
+    hits: list[dict[str, Any]], activity_id: int | None = None, phrase: str | None = None
+) -> dict[str, Any] | None:
+    """The requested activity, else the one named ``phrase``, else the first strength activity,
+    else the first hit.
+
+    Fitatu's search is fuzzy: "trójbój siłowy" also finds "Tenis stołowy" and dozens of
+    strength exercises counted in reps, so an exact name match wins over the hit order.
+    """
     if activity_id is not None:
         return next((h for h in hits if int(h.get("activityId", -1)) == activity_id), None)
+    if phrase:
+        wanted = phrase.strip().casefold()
+        exact = next((h for h in hits if str(h.get("name", "")).strip().casefold() == wanted), None)
+        if exact is not None:
+            return exact
     return next((h for h in hits if h.get("type") == STRENGTH), hits[0] if hits else None)

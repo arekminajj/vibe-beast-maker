@@ -12,6 +12,7 @@ import requests
 
 DEFAULT_BASE_URL = "https://api.hevyapp.com"
 PAGE_SIZE = 10  # the API's maximum for workouts and events
+TEMPLATE_PAGE_SIZE = 100  # the API's maximum for exercise templates
 
 
 class HevyError(RuntimeError):
@@ -65,6 +66,7 @@ class HevyClient:
         self.session = session or requests.Session()
         self.timeout = timeout
         self.max_retries = max_retries
+        self._templates: dict[str, dict[str, Any]] | None = None
 
     def request(self, path: str, params: dict[str, Any] | None = None) -> Any:
         for attempt in range(self.max_retries + 1):
@@ -82,11 +84,13 @@ class HevyClient:
             raise HevyError(res.status_code, path, res.text)
         raise AssertionError("unreachable")
 
-    def _pages(self, path: str, key: str, params: dict[str, Any] | None = None) -> Iterator[dict[str, Any]]:
+    def _pages(
+        self, path: str, key: str, params: dict[str, Any] | None = None, page_size: int = PAGE_SIZE
+    ) -> Iterator[dict[str, Any]]:
         page = 1
         while True:
             try:
-                data = self.request(path, {**(params or {}), "page": page, "pageSize": PAGE_SIZE})
+                data = self.request(path, {**(params or {}), "page": page, "pageSize": page_size})
             except HevyError as exc:
                 if exc.status == 404 and page > 1:  # the API answers 404 past the last page
                     return
@@ -112,3 +116,28 @@ class HevyClient:
         """Ids of workouts deleted since ``since`` (from the workout events feed)."""
         params = {"since": since.isoformat()}
         return {str(e["id"]) for e in self._pages("/v1/workouts/events", "events", params) if e.get("type") == "deleted"}
+
+    def raw_workouts_between(self, start: datetime, end: datetime | None = None) -> list[dict[str, Any]]:
+        """Workouts as the API sends them (exercises and sets included) that started in
+        [``start``, ``end``), newest first."""
+        out: list[dict[str, Any]] = []
+        for raw in self._pages("/v1/workouts", "workouts"):
+            began = _parse_time(raw["start_time"])
+            if began < start:
+                break  # the list is newest first
+            if end is None or began < end:
+                out.append(raw)
+        return out
+
+    def exercise_templates(self) -> dict[str, dict[str, Any]]:
+        """Every exercise template (built-in and custom) by id, fetched once per client."""
+        if self._templates is None:
+            self._templates = {
+                str(t["id"]): t
+                for t in self._pages("/v1/exercise_templates", "exercise_templates", page_size=TEMPLATE_PAGE_SIZE)
+            }
+        return self._templates
+
+    def body_measurements(self) -> list[dict[str, Any]]:
+        """Body measurements logged in Hevy ({date, weight_kg, ...}), as the API sends them."""
+        return list(self._pages("/v1/body_measurements", "body_measurements"))

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "hevy-fitatu": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "hevy-fitatu-sync[mcp] @ git+https://github.com/arekminajj/vibe-beast-maker",
+        "hevy-fitatu-mcp"
+      ],
+      "env": {
+        "HEVY_API_KEY": "${user_config.hevy_api_key}",
+        "FITATU_EMAIL": "${user_config.fitatu_email}",
+        "FITATU_PASSWORD": "${user_config.fitatu_password}",
+        "HEVY_FITATU_TIMEZONE": "${user_config.timezone}"
+      }
+    }
+  }
+}

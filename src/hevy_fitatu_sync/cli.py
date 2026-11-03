@@ -19,7 +19,7 @@ from . import __version__
 from .energy import rate_from_hit
 from .hevy import HevyClient, HevyError
 from .state import State, default_state_path
-from .sync import DEFAULT_ACTIVITY_PHRASE, Config, Report, SyncError, Syncer, search_activities
+from .sync import DEFAULT_ACTIVITY_PHRASE, DEFAULT_KCAL_PER_HOUR, Config, Report, Syncer, SyncError, search_activities
 
 
 class CliError(Exception):
@@ -166,7 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--activity", default=DEFAULT_ACTIVITY_PHRASE,
                       help=f"Fitatu activity to log, searched by name (default {DEFAULT_ACTIVITY_PHRASE!r})")
     sync.add_argument("--activity-id", type=int, help="a specific activity id from `activities`")
-    sync.add_argument("--kcal-per-hour", type=float, help="use this burn rate instead of Fitatu's estimate")
+    burn = sync.add_mutually_exclusive_group()
+    burn.add_argument("--kcal-per-hour", type=float, default=DEFAULT_KCAL_PER_HOUR,
+                      help=f"burn rate used for the kcal (default {DEFAULT_KCAL_PER_HOUR:g})")
+    burn.add_argument("--fitatu-estimate", dest="kcal_per_hour", action="store_const", const=None, default=DEFAULT_KCAL_PER_HOUR,
+                      help="use Fitatu's catalog estimate for the activity instead of --kcal-per-hour")
     sync.add_argument("--min-minutes", type=int, default=1, help="skip workouts shorter than this")
     sync.add_argument("--timezone", help="IANA zone for the workout's day (default $HEVY_FITATU_TIMEZONE, "
                       "$HEVY_TIMEZONE, else the system zone)")

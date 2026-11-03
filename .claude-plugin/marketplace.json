@@ -1,0 +1,12 @@
+{
+  "name": "vibe-beast-maker",
+  "owner": { "name": "arekminajj" },
+  "metadata": { "description": "Training and nutrition tools for Claude." },
+  "plugins": [
+    {
+      "name": "hevy-fitatu",
+      "source": "./",
+      "description": "Hevy training and Fitatu food diary together, for Claude to analyze. Read-only."
+    }
+  ]
+}
