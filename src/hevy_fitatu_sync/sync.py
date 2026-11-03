@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -16,7 +16,12 @@ from .energy import ActivityRate, pick_hit, rate_from_hit
 from .hevy import HevyClient, Workout
 from .state import State, SyncedWorkout
 
-DEFAULT_ACTIVITY_PHRASE = "trening siłowy"
+# Fitatu's catalog has no time-based "strength training"; its strength entries are single
+# exercises counted in reps. Powerlifting is the closest activity measured in minutes.
+DEFAULT_ACTIVITY_PHRASE = "Trójbój siłowy"
+# Fitatu rates powerlifting at ~516 kcal/h, which overcounts a gym session with rests between
+# sets; 300 kcal/h is a moderate estimate for strength training.
+DEFAULT_KCAL_PER_HOUR = 300.0
 _NAMESPACE = uuid.UUID("6f1d3c2a-8b7e-4c55-9a0e-2f4b1d7c9e31")
 
 ActionKind = Literal["add", "replace", "remove", "keep"]
@@ -43,7 +48,7 @@ class Config:
     timezone: ZoneInfo
     activity_phrase: str = DEFAULT_ACTIVITY_PHRASE
     activity_id: int | None = None
-    kcal_per_hour: float | None = None
+    kcal_per_hour: float | None = DEFAULT_KCAL_PER_HOUR  # None: use Fitatu's catalog estimate
     min_minutes: int = 1
 
 
@@ -146,7 +151,7 @@ class Syncer:
         self.state = state
         self.config = config
         self._save = save_state or (lambda _state: None)
-        self._now = now or (lambda: datetime.now(timezone.utc))
+        self._now = now or (lambda: datetime.now(UTC))
         self.user_id = str(fitatu.auth.fitatu_user_id)
 
     # -- the activity and its kcal rate -----------------------------------------------
@@ -156,7 +161,7 @@ class Syncer:
     def resolve_rate(self) -> ActivityRate:
         cfg = self.config
         hits = self.search_activities(cfg.activity_phrase, limit=20)
-        hit = pick_hit(hits, cfg.activity_id)
+        hit = pick_hit(hits, cfg.activity_id, cfg.activity_phrase)
         if cfg.kcal_per_hour is not None:
             if hit is None and cfg.activity_id is None:
                 raise SyncError(f"no Fitatu activity matches {cfg.activity_phrase!r}; pass --activity or --activity-id")
@@ -174,7 +179,8 @@ class Syncer:
         if rate is None:
             raise SyncError(
                 f"Fitatu gives no usable kcal estimate for {hit.get('name')!r} "
-                f"({hit.get('energy')} kcal for {hit.get('measuresDescription')!r}); pass --kcal-per-hour"
+                f"({hit.get('energy')} kcal for {hit.get('measuresDescription')!r}); pass --kcal-per-hour or "
+                "choose an activity measured in minutes"
             )
         return rate
 

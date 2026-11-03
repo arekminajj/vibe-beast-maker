@@ -7,10 +7,10 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+from helpers import FakeHevy, activities_on, demo_fitatu, workout
+
 from hevy_fitatu_sync import cli
 from hevy_fitatu_sync.state import State
-
-from helpers import FakeHevy, activities_on, demo_fitatu, workout
 
 
 class Cli(unittest.TestCase):

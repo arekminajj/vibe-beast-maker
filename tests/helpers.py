@@ -19,6 +19,13 @@ STRENGTH_HIT = {
     "measuresDescription": "60 min",
     "measures": [{"measureId": 1, "measureType": "TIME", "value": 60}],
 }
+# What Fitatu's real search for "Trójbój siłowy" returns first: a fuzzy match, then the
+# activity itself (cardio, measured in minutes), then strength exercises counted in reps.
+REAL_CATALOG = [
+    {"activityId": 1158, "name": "Tenis stołowy", "type": 2, "energy": 600, "measuresDescription": "75 min"},
+    {"activityId": 1191, "name": "Trójbój siłowy", "type": 2, "energy": 258, "measuresDescription": "30 min"},
+    {"activityId": 1638, "name": "Skłony tułowia w tył", "type": 1, "energy": 197, "measuresDescription": "100 reps"},
+]
 CARDIO_HIT = {"activityId": 535, "name": "Bieganie", "type": 2, "energy": 340, "measuresDescription": "5 km w 00:30:00"}
 
 

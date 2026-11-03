@@ -3,8 +3,8 @@
 Logs your [Hevy](https://hevy.com) workouts in the [Fitatu](https://www.fitatu.com) diary as
 activities, so the kcal you burn lifting count toward the day's balance in Fitatu.
 
-Each Hevy workout becomes one Fitatu activity (by default *Trening siłowy*) on the workout's
-day, with its length and an estimate of the kcal burned. Running the sync again is safe:
+Each Hevy workout becomes one Fitatu activity (by default *Trójbój siłowy* at 300 kcal/h) on
+the workout's day, with its length and an estimate of the kcal burned. Running the sync again is safe:
 workouts already in Fitatu are left alone, edited workouts are replaced and deleted workouts
 are removed.
 
@@ -49,10 +49,10 @@ hevy-fitatu-sync activities "trening" # the Fitatu activities you can log workou
 
 ```text
 $ hevy-fitatu-sync sync
-Fitatu activity: Trening siłowy (id 610), 290 kcal/h [Fitatu: 290 kcal for 60 min]
+Fitatu activity: Trójbój siłowy (id 1191), 300 kcal/h [--kcal-per-hour 300]
 Workouts since 2026-10-28:
-  ✓ add 2026-10-29 'Push' 72 min, 348 kcal
-  ✓ replace 2026-10-30 60 min/290 kcal -> 2026-10-31 'Legs' 85 min, 411 kcal
+  ✓ add 2026-10-29 'Push' 72 min, 360 kcal
+  ✓ replace 2026-10-30 60 min/300 kcal -> 2026-10-31 'Legs' 85 min, 425 kcal
   ✓ remove 2026-11-01 'Pull' (deleted in Hevy)
 ```
 
@@ -62,9 +62,10 @@ Workouts since 2026-10-28:
 | --- | --- | --- |
 | `--days N` / `--since YYYY-MM-DD` | `--days 7` | Which workouts to sync, by the day they started. Older synced workouts are never touched. |
 | `--dry-run` | off | Show the plan, write nothing. |
-| `--activity PHRASE` | `trening siłowy` | The Fitatu activity to log, found by searching the catalog (the first *strength* hit wins). |
+| `--activity PHRASE` | `Trójbój siłowy` | The Fitatu activity to log, found by searching the catalog (an exact name match wins, else the first *strength* hit). |
 | `--activity-id ID` | | A specific activity from `hevy-fitatu-sync activities`. |
-| `--kcal-per-hour N` | Fitatu's estimate | Use your own burn rate. |
+| `--kcal-per-hour N` | `300` | The burn rate the kcal are computed from. |
+| `--fitatu-estimate` | off | Use Fitatu's catalog estimate for the activity instead (516 kcal/h for *Trójbój siłowy*, scaled to your profile). |
 | `--min-minutes N` | `1` | Skip shorter workouts. |
 | `--timezone ZONE` | `$HEVY_FITATU_TIMEZONE`, `$HEVY_TIMEZONE`, system | Decides which day a late-evening workout falls on. |
 | `--state PATH` | `$HEVY_FITATU_STATE`, `~/.hevy-fitatu-sync/state.json` | What has been synced. |
@@ -83,10 +84,15 @@ Every hour with cron:
 
 ## How it works
 
-- **The kcal.** Hevy does not estimate calories, so the sync uses Fitatu's own estimate:
-  the catalog gives each activity's kcal for an effort such as *60 min*, computed for your BMR
-  and sex from your Fitatu profile. That is scaled to the workout's length, from its start to
-  its end time in Hevy. `--kcal-per-hour` overrides it.
+- **The activity.** Fitatu's catalog has no time-based *strength training*: its strength
+  entries are single exercises counted in reps. *Trójbój siłowy* (powerlifting) is the
+  closest activity measured in minutes, so that is what gets logged.
+- **The kcal.** Hevy does not estimate calories, so the workout's length (from its start to its
+  end time in Hevy) is multiplied by 300 kcal/h, a moderate rate for a gym session with rests
+  between sets. Change it with `--kcal-per-hour`, or pass `--fitatu-estimate` to use Fitatu's
+  own figure for the activity (its catalog kcal for an effort such as *30 min*, computed for
+  your BMR and sex and scaled to the workout's length; for powerlifting that is about
+  516 kcal/h, which overcounts most sessions).
 - **No duplicates.** Each activity gets an id derived from the Hevy workout and its day,
   length and activity, so a repeated run, or a run after the state file was lost, finds the
   activity already in Fitatu instead of adding it again.

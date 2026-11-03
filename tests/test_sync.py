@@ -1,17 +1,17 @@
 import tempfile
 import unittest
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from hevy_fitatu_sync.state import State
-from hevy_fitatu_sync.sync import Config, SyncError, Syncer, row_id_for
+from helpers import CARDIO_HIT, REAL_CATALOG, FakeHevy, activities_on, demo_fitatu, workout
 
-from helpers import CARDIO_HIT, FakeHevy, activities_on, demo_fitatu, workout
+from hevy_fitatu_sync.state import State
+from hevy_fitatu_sync.sync import Config, Syncer, SyncError, row_id_for
 
 WARSAW = ZoneInfo("Europe/Warsaw")
-NOW = datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 
 
 def config(**kw):
@@ -133,7 +133,7 @@ class Sync(unittest.TestCase):
     def test_passes_bmr_and_sex_to_the_catalog(self):
         h = self.harness([])
         h.run(dry_run=True)
-        self.assertEqual(h.fitatu.search_seen, {"phrase": "trening siłowy", "bmr": 1600.0, "sex": 1})
+        self.assertEqual(h.fitatu.search_seen, {"phrase": "Trójbój siłowy", "bmr": 1600.0, "sex": 1})
 
     def test_kcal_per_hour_override(self):
         h = self.harness([workout("w1", "2026-10-02T17:00:00Z", 30)], kcal_per_hour=500)
@@ -141,14 +141,25 @@ class Sync(unittest.TestCase):
         self.assertEqual((report.rate.activity_id, report.actions[0].energy), (610, 250))
 
     def test_unknown_activity_id_is_a_clear_error(self):
-        h = self.harness([], activity_id=12345)
+        h = self.harness([], activity_id=12345, kcal_per_hour=None)
         with self.assertRaisesRegex(SyncError, "activity id 12345"):
             h.run(dry_run=True)
 
     def test_activity_without_duration_needs_kcal_per_hour(self):
-        h = self.harness([], hits=[{**CARDIO_HIT, "measuresDescription": "10 serii"}])
+        h = self.harness([], hits=[{**CARDIO_HIT, "measuresDescription": "10 serii"}], kcal_per_hour=None)
         with self.assertRaisesRegex(SyncError, "--kcal-per-hour"):
             h.run(dry_run=True)
+
+    def test_default_on_the_real_catalog_logs_powerlifting_at_300_kcal_per_hour(self):
+        h = self.harness([workout("w1", "2026-10-02T17:00:00Z", 90)], hits=REAL_CATALOG)
+        report = h.run(dry_run=True)
+        self.assertEqual((report.rate.activity_id, report.rate.name), (1191, "Trójbój siłowy"))
+        self.assertEqual(report.actions[0].energy, 450)
+
+    def test_fitatu_estimate_on_the_real_catalog(self):
+        h = self.harness([workout("w1", "2026-10-02T17:00:00Z", 60)], hits=REAL_CATALOG, kcal_per_hour=None)
+        report = h.run(dry_run=True)
+        self.assertEqual((report.rate.activity_id, report.actions[0].energy), (1191, 516))
 
     def test_a_failed_write_does_not_stop_the_others(self):
         from fitatu_api.exceptions import FitatuApiError

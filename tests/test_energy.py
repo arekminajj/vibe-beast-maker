@@ -1,8 +1,8 @@
 import unittest
 
-from hevy_fitatu_sync.energy import pick_hit, rate_from_hit, reference_minutes
-
 from helpers import CARDIO_HIT, STRENGTH_HIT
+
+from hevy_fitatu_sync.energy import pick_hit, rate_from_hit, reference_minutes
 
 
 class ReferenceMinutes(unittest.TestCase):
@@ -34,6 +34,11 @@ class Rates(unittest.TestCase):
         self.assertEqual(pick_hit([CARDIO_HIT, STRENGTH_HIT], 535)["activityId"], 535)
         self.assertIsNone(pick_hit([CARDIO_HIT], 999))
         self.assertIsNone(pick_hit([]))
+
+    def test_pick_hit_prefers_the_exact_name(self):
+        hits = [STRENGTH_HIT, CARDIO_HIT]
+        self.assertEqual(pick_hit(hits, phrase=" bieganie ")["activityId"], 535)
+        self.assertEqual(pick_hit(hits, phrase="biegi")["activityId"], 610)  # no exact match: strength first
 
 
 if __name__ == "__main__":
