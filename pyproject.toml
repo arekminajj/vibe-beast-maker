@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hevy-fitatu-sync"
+version = "0.1.0"
+description = "Sync Hevy workouts into the Fitatu diary as activities (burned kcal)."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+  "fitatu-api>=0.6",
+  "requests>=2.31",
+]
+keywords = ["hevy", "fitatu", "workout", "calories", "sync"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+hevy-fitatu-sync = "hevy_fitatu_sync.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hevy_fitatu_sync"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
